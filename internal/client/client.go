@@ -144,3 +144,50 @@ func (c *Client) GetUpdateInterval(ctx context.Context) (*models.UpdateIntervalR
 
 	return result, nil
 }
+
+// SendDockerData sends Docker integration data to the server
+func (c *Client) SendDockerData(ctx context.Context, payload *models.DockerPayload) (*models.DockerResponse, error) {
+	url := fmt.Sprintf("%s/api/%s/integrations/docker", c.config.PatchmonServer, c.config.APIVersion)
+
+	c.logger.WithFields(logrus.Fields{
+		"url":    url,
+		"method": "POST",
+	}).Debug("Sending Docker data to server")
+
+	resp, err := c.client.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("X-API-ID", c.credentials.APIID).
+		SetHeader("X-API-KEY", c.credentials.APIKey).
+		SetBody(payload).
+		SetResult(&models.DockerResponse{}).
+		Post(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("docker data request failed: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, fmt.Errorf("docker data request failed with status %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	result, ok := resp.Result().(*models.DockerResponse)
+	if !ok {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	return result, nil
+}
+
+// SendDockerStatusEvent sends a real-time Docker container status event via WebSocket
+func (c *Client) SendDockerStatusEvent(event *models.DockerStatusEvent) error {
+	// This will be called by the WebSocket connection in the serve command
+	// For now, we'll just log it
+	c.logger.WithFields(logrus.Fields{
+		"type":         event.Type,
+		"container_id": event.ContainerID,
+		"name":         event.Name,
+		"status":       event.Status,
+	}).Debug("Docker status event")
+	return nil
+}

@@ -2,12 +2,16 @@ package commands
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
 	"patchmon-agent/internal/client"
+	"patchmon-agent/internal/integrations"
+	"patchmon-agent/internal/integrations/docker"
+	"patchmon-agent/pkg/models"
 
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
@@ -46,14 +50,30 @@ func runService() error {
 	ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
 	defer ticker.Stop()
 
+	// Send startup ping to notify server that agent has started
+	logger.Info("🚀 Agent starting up, notifying server...")
+	if _, err := httpClient.Ping(ctx); err != nil {
+		logger.WithError(err).Warn("startup ping failed, will retry")
+	} else {
+		logger.Info("✅ Startup notification sent to server")
+	}
+
 	// initial report on boot
+	logger.Info("Sending initial report on startup...")
 	if err := sendReport(); err != nil {
 		logger.WithError(err).Warn("initial report failed")
+	} else {
+		logger.Info("✅ Initial report sent successfully")
 	}
 
 	// start websocket loop
+	logger.Info("Establishing WebSocket connection...")
 	messages := make(chan wsMsg, 10)
-	go wsLoop(messages)
+	dockerEvents := make(chan interface{}, 100)
+	go wsLoop(messages, dockerEvents)
+
+	// Start integration monitoring (Docker real-time events, etc.)
+	startIntegrationMonitoring(ctx, dockerEvents)
 
 	for {
 		select {
@@ -92,6 +112,29 @@ func runService() error {
 	}
 }
 
+// startIntegrationMonitoring starts real-time monitoring for integrations that support it
+func startIntegrationMonitoring(ctx context.Context, eventChan chan<- interface{}) {
+	// Create integration manager
+	integrationMgr := integrations.NewManager(logger)
+
+	// Register integrations
+	dockerInteg := docker.New(logger)
+	integrationMgr.Register(dockerInteg)
+
+	// Start monitoring for real-time integrations
+	realtimeIntegrations := integrationMgr.GetRealtimeIntegrations()
+	for _, integration := range realtimeIntegrations {
+		logger.WithField("integration", integration.Name()).Info("Starting real-time monitoring")
+
+		// Start monitoring in a goroutine
+		go func(integ integrations.RealtimeIntegration) {
+			if err := integ.StartMonitoring(ctx, eventChan); err != nil {
+				logger.WithError(err).Warn("Failed to start integration monitoring")
+			}
+		}(integration)
+	}
+}
+
 type wsMsg struct {
 	kind     string
 	interval int
@@ -99,10 +142,10 @@ type wsMsg struct {
 	force    bool
 }
 
-func wsLoop(out chan<- wsMsg) {
+func wsLoop(out chan<- wsMsg, dockerEvents <-chan interface{}) {
 	backoff := time.Second
 	for {
-		if err := connectOnce(out); err != nil {
+		if err := connectOnce(out, dockerEvents); err != nil {
 			logger.WithError(err).Warn("ws disconnected; retrying")
 		}
 		time.Sleep(backoff)
@@ -112,7 +155,7 @@ func wsLoop(out chan<- wsMsg) {
 	}
 }
 
-func connectOnce(out chan<- wsMsg) error {
+func connectOnce(out chan<- wsMsg, dockerEvents <-chan interface{}) error {
 	server := cfgManager.GetConfig().PatchmonServer
 	if server == "" {
 		return nil
@@ -135,7 +178,18 @@ func connectOnce(out chan<- wsMsg) error {
 	header.Set("X-API-ID", apiID)
 	header.Set("X-API-KEY", apiKey)
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	// Configure WebSocket dialer for insecure connections if needed
+	dialer := websocket.DefaultDialer
+	if cfgManager.GetConfig().SkipSSLVerify {
+		dialer = &websocket.Dialer{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		logger.Warn("⚠️  SSL certificate verification is disabled for WebSocket")
+	}
+
+	conn, _, err := dialer.Dial(wsURL, header)
 	if err != nil {
 		return err
 	}
@@ -157,6 +211,32 @@ func connectOnce(out chan<- wsMsg) error {
 	})
 
 	logger.WithField("url", wsURL).Info("WebSocket connected")
+
+	// Create a goroutine to send Docker events through WebSocket
+	go func() {
+		for event := range dockerEvents {
+			if dockerEvent, ok := event.(models.DockerStatusEvent); ok {
+				eventJSON, err := json.Marshal(map[string]interface{}{
+					"type":         "docker_status",
+					"event":        dockerEvent,
+					"container_id": dockerEvent.ContainerID,
+					"name":         dockerEvent.Name,
+					"status":       dockerEvent.Status,
+					"timestamp":    dockerEvent.Timestamp,
+				})
+				if err != nil {
+					logger.WithError(err).Warn("Failed to marshal Docker event")
+					continue
+				}
+
+				if err := conn.WriteMessage(websocket.TextMessage, eventJSON); err != nil {
+					logger.WithError(err).Debug("Failed to send Docker event via WebSocket")
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {

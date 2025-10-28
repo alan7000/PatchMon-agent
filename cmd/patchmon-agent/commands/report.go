@@ -7,6 +7,8 @@ import (
 
 	"patchmon-agent/internal/client"
 	"patchmon-agent/internal/hardware"
+	"patchmon-agent/internal/integrations"
+	"patchmon-agent/internal/integrations/docker"
 	"patchmon-agent/internal/network"
 	"patchmon-agent/internal/packages"
 	"patchmon-agent/internal/repositories"
@@ -213,6 +215,82 @@ func sendReport() error {
 		}
 	}
 
+	// Collect and send integration data (Docker, etc.) separately
+	// This ensures failures in integrations don't affect core system reporting
+	sendIntegrationData()
+
 	logger.Debug("Report process completed")
 	return nil
+}
+
+// sendIntegrationData collects and sends data from integrations (Docker, etc.)
+func sendIntegrationData() {
+	logger.Debug("Starting integration data collection")
+
+	// Create integration manager
+	integrationMgr := integrations.NewManager(logger)
+
+	// Register available integrations
+	integrationMgr.Register(docker.New(logger))
+	// Future: integrationMgr.Register(proxmox.New(logger))
+	// Future: integrationMgr.Register(kubernetes.New(logger))
+
+	// Discover and collect from all available integrations
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	integrationData := integrationMgr.CollectAll(ctx)
+
+	if len(integrationData) == 0 {
+		logger.Debug("No integration data to send")
+		return
+	}
+
+	// Get system info for integration payloads
+	systemDetector := system.New(logger)
+	hostname, _ := systemDetector.GetHostname()
+	machineID := systemDetector.GetMachineID()
+
+	// Create HTTP client
+	httpClient := client.New(cfgManager, logger)
+
+	// Send Docker data if available
+	if dockerData, exists := integrationData["docker"]; exists && dockerData.Error == "" {
+		sendDockerData(httpClient, dockerData, hostname, machineID)
+	}
+
+	// Future: Send other integration data here
+}
+
+// sendDockerData sends Docker integration data to server
+func sendDockerData(httpClient *client.Client, integrationData *models.IntegrationData, hostname, machineID string) {
+	// Extract Docker data from integration data
+	dockerData, ok := integrationData.Data.(*models.DockerData)
+	if !ok {
+		logger.Warn("Failed to extract Docker data from integration")
+		return
+	}
+
+	payload := &models.DockerPayload{
+		DockerData:   *dockerData,
+		Hostname:     hostname,
+		MachineID:    machineID,
+		AgentVersion: version.Version,
+	}
+
+	logger.Info("Sending Docker data to server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	response, err := httpClient.SendDockerData(ctx, payload)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to send Docker data (will retry on next report)")
+		return
+	}
+
+	logger.WithFields(logrus.Fields{
+		"containers": response.ContainersReceived,
+		"images":     response.ImagesReceived,
+		"updates":    response.UpdatesFound,
+	}).Info("Docker data sent successfully")
 }

@@ -65,16 +65,24 @@ func (d *Integration) IsAvailable() bool {
 		return false
 	}
 
+	// Defer close to ensure cleanup if we don't store the client
+	shouldClose := true
+	defer func() {
+		if shouldClose && cli != nil {
+			_ = cli.Close()
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if _, err := cli.Ping(ctx); err != nil {
 		d.logger.WithError(err).Debug("Failed to ping Docker daemon")
-		cli.Close()
 		return false
 	}
 
-	// Store the client for later use
+	// Store the client for later use (prevent deferred close)
+	shouldClose = false
 	d.client = cli
 	return true
 }

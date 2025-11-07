@@ -154,7 +154,7 @@ func (m *Manager) SaveConfig() error {
 	configViper.Set("skip_ssl_verify", m.config.SkipSSLVerify)
 	
 	// Save integrations if they exist
-	if m.config.Integrations != nil && len(m.config.Integrations) > 0 {
+	if len(m.config.Integrations) > 0 {
 		configViper.Set("integrations", m.config.Integrations)
 	}
 

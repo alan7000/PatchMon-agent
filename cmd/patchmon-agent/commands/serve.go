@@ -329,7 +329,7 @@ func toggleIntegration(integrationName string, enabled bool) error {
 	}
 
 	logger.Info("Config updated, restarting patchmon-agent service...")
-	
+
 	// Restart the service to apply changes
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

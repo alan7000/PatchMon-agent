@@ -373,7 +373,9 @@ rm -f "$0"
 			if err := cmd.Start(); err != nil {
 				logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on OpenRC auto-restart")
 				// Clean up script
-				os.Remove(helperPath)
+				if removeErr := os.Remove(helperPath); removeErr != nil {
+					logger.WithError(removeErr).Debug("Failed to remove helper script")
+				}
 				// Fall through to exit approach
 			} else {
 				logger.Info("Scheduled service restart via helper script, exiting now...")

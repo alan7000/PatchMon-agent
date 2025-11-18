@@ -116,7 +116,7 @@ func updateAgent() error {
 	resolvedPath, err := filepath.EvalSymlinks(executablePath)
 	if err != nil {
 		logger.WithError(err).WithField("path", executablePath).Warn("Could not resolve symlinks, using original path")
-		resolvedPath = executablePath
+		// Use original path if symlink resolution fails
 	} else if resolvedPath != executablePath {
 		logger.WithField("original", executablePath).WithField("resolved", resolvedPath).Debug("Resolved executable symlink")
 		executablePath = resolvedPath
@@ -564,7 +564,10 @@ func markRecentUpdate() {
 	updateMarkerPath := "/etc/patchmon/.last_update_timestamp"
 
 	// Ensure directory exists
-	os.MkdirAll("/etc/patchmon", 0755)
+	if err := os.MkdirAll("/etc/patchmon", 0755); err != nil {
+		logger.WithError(err).Debug("Could not create /etc/patchmon directory (non-critical)")
+		return
+	}
 
 	// Create or update the timestamp file
 	file, err := os.Create(updateMarkerPath)
@@ -572,10 +575,14 @@ func markRecentUpdate() {
 		logger.WithError(err).Debug("Could not create update marker file (non-critical)")
 		return
 	}
-	file.Close()
+	if err := file.Close(); err != nil {
+		logger.WithError(err).Debug("Could not close update marker file (non-critical)")
+	}
 
 	// Set permissions
-	os.Chmod(updateMarkerPath, 0644)
+	if err := os.Chmod(updateMarkerPath, 0644); err != nil {
+		logger.WithError(err).Debug("Could not set permissions on update marker file (non-critical)")
+	}
 	logger.Debug("Marked recent update to prevent update loops")
 }
 
@@ -658,7 +665,9 @@ rm -f "$0"
 			if err := cmd.Start(); err != nil {
 				logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on OpenRC auto-restart")
 				// Clean up script
-				os.Remove(helperPath)
+				if removeErr := os.Remove(helperPath); removeErr != nil {
+					logger.WithError(removeErr).Debug("Failed to remove helper script")
+				}
 				// Fall through to exit approach
 			} else {
 				logger.Info("Scheduled service restart via helper script, exiting now...")

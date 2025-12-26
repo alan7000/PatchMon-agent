@@ -48,13 +48,13 @@ func TestDNFManager_parseUpgradablePackages(t *testing.T) {
 	manager := NewDNFManager(logger)
 
 	tests := []struct {
-		name             string
-		input            string
-		pkgMgr           string
+		name              string
+		input             string
+		pkgMgr            string
 		installedPackages map[string]string
-		securityPackages map[string]bool
-		expected         int
-		expectedSecurity int
+		securityPackages  map[string]bool
+		expected          int
+		expectedSecurity  int
 	}{
 		{
 			name: "upgradable packages",

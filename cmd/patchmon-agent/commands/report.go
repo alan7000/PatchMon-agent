@@ -102,10 +102,10 @@ func sendReport(outputJson bool) error {
 	needsReboot, rebootReason := systemDetector.CheckRebootRequired()
 	installedKernel := systemDetector.GetLatestInstalledKernel()
 	logger.WithFields(logrus.Fields{
-		"needs_reboot":        needsReboot,
-		"reason":              rebootReason,
-		"installed_kernel":    installedKernel,
-		"running_kernel":      systemInfo.KernelVersion,
+		"needs_reboot":     needsReboot,
+		"reason":           rebootReason,
+		"installed_kernel": installedKernel,
+		"running_kernel":   systemInfo.KernelVersion,
 	}).Info("Reboot status check completed")
 
 	// Get package information
@@ -172,31 +172,31 @@ func sendReport(outputJson bool) error {
 
 	// Create payload
 	payload := &models.ReportPayload{
-		Packages:          packageList,
-		Repositories:      repoList,
-		OSType:            osType,
-		OSVersion:         osVersion,
-		Hostname:          hostname,
-		IP:                ipAddress,
-		Architecture:      architecture,
-		AgentVersion:      version.Version,
-		MachineID:             systemDetector.GetMachineID(),
-		KernelVersion:         systemInfo.KernelVersion,
+		Packages:               packageList,
+		Repositories:           repoList,
+		OSType:                 osType,
+		OSVersion:              osVersion,
+		Hostname:               hostname,
+		IP:                     ipAddress,
+		Architecture:           architecture,
+		AgentVersion:           version.Version,
+		MachineID:              systemDetector.GetMachineID(),
+		KernelVersion:          systemInfo.KernelVersion,
 		InstalledKernelVersion: installedKernel,
-		SELinuxStatus:         systemInfo.SELinuxStatus,
-		SystemUptime:      systemInfo.SystemUptime,
-		LoadAverage:       systemInfo.LoadAverage,
-		CPUModel:          hardwareInfo.CPUModel,
-		CPUCores:          hardwareInfo.CPUCores,
-		RAMInstalled:      hardwareInfo.RAMInstalled,
-		SwapSize:          hardwareInfo.SwapSize,
-		DiskDetails:       hardwareInfo.DiskDetails,
-		GatewayIP:         networkInfo.GatewayIP,
-		DNSServers:        networkInfo.DNSServers,
-		NetworkInterfaces: networkInfo.NetworkInterfaces,
-		ExecutionTime:     executionTime,
-		NeedsReboot:       needsReboot,
-		RebootReason:      rebootReason,
+		SELinuxStatus:          systemInfo.SELinuxStatus,
+		SystemUptime:           systemInfo.SystemUptime,
+		LoadAverage:            systemInfo.LoadAverage,
+		CPUModel:               hardwareInfo.CPUModel,
+		CPUCores:               hardwareInfo.CPUCores,
+		RAMInstalled:           hardwareInfo.RAMInstalled,
+		SwapSize:               hardwareInfo.SwapSize,
+		DiskDetails:            hardwareInfo.DiskDetails,
+		GatewayIP:              networkInfo.GatewayIP,
+		DNSServers:             networkInfo.DNSServers,
+		NetworkInterfaces:      networkInfo.NetworkInterfaces,
+		ExecutionTime:          executionTime,
+		NeedsReboot:            needsReboot,
+		RebootReason:           rebootReason,
 	}
 
 	// If --report-json flag is set, output JSON and exit
@@ -247,7 +247,7 @@ func sendReport(outputJson bool) error {
 			// Add a delay to prevent immediate checks after service restart
 			// This gives the new process time to fully initialize
 			time.Sleep(5 * time.Second)
-			
+
 			logger.Info("Checking for agent updates...")
 			versionInfo, err := getServerVersionInfo()
 			if err != nil {

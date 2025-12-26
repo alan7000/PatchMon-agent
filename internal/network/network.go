@@ -109,7 +109,7 @@ func (m *Manager) getIPv6GatewayIP() string {
 
 			// Check for default route: Dest is all zeros and prefix length is 00
 			if dest == "00000000000000000000000000000000" && prefixLen == "00" {
-				// Ignore if gateway is also 0 (means on-link) unless that's what we want, 
+				// Ignore if gateway is also 0 (means on-link) unless that's what we want,
 				// but usually we want the router address.
 				if gatewayHex != "00000000000000000000000000000000" {
 					return m.hexToIPv6(gatewayHex)
@@ -229,7 +229,7 @@ func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 			if ipnet, ok := addr.(*net.IPNet); ok {
 				var family string
 				var gateway string
-				
+
 				if ipnet.IP.To4() != nil {
 					family = constants.IPFamilyIPv4
 					gateway = ipv4Gateway
@@ -312,7 +312,7 @@ func (m *Manager) getInterfaceGateway(interfaceName string, ipv6 bool) string {
 			// Use ip route (defaults to IPv4)
 			cmd = exec.Command("ip", "route", "show", "dev", interfaceName)
 		}
-		
+
 		output, err := cmd.Output()
 		if err == nil {
 			lines := strings.Split(string(output), "\n")

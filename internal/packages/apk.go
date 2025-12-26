@@ -211,4 +211,3 @@ func (m *APKManager) extractPackageNameAndVersion(packageWithVersion string) (pa
 	packageName = packageWithVersion
 	return
 }
-

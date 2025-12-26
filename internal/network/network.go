@@ -120,8 +120,8 @@ func (m *Manager) getIPv6GatewayIP() string {
 	return ""
 }
 
-// hexToIP converts hex IP address to dotted decimal notation
-func (m *Manager) hexToIP(hexIP string) string {
+// hexToIPv4 converts hex IP address to dotted decimal notation
+func (m *Manager) hexToIPv4(hexIP string) string {
 	if len(hexIP) != 8 {
 		return ""
 	}
@@ -137,6 +137,19 @@ func (m *Manager) hexToIP(hexIP string) string {
 	}
 
 	return net.IP(ip).String()
+}
+
+// hexToIPv6 converts standard hex IPv6 string (32 chars) to IP string
+func (m *Manager) hexToIPv6(hexIP string) string {
+	if len(hexIP) != 32 {
+		return ""
+	}
+	// IPv6 in /proc/net/ipv6_route is simply a 32-char hex string (Big Endian usually)
+	bytes, err := hex.DecodeString(hexIP)
+	if err != nil {
+		return ""
+	}
+	return net.IP(bytes).String()
 }
 
 // parseHexByte parses a 2-character hex string to byte

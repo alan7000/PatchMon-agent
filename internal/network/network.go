@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -345,7 +346,7 @@ func (m *Manager) getInterfaceGateway(interfaceName string, ipv6 bool) string {
 			fields := strings.Fields(line)
 			if len(fields) >= 3 && fields[0] == interfaceName && fields[1] == "00000000" {
 				// Default route for this interface
-				if gateway := m.hexToIP(fields[2]); gateway != "" {
+				if gateway := m.hexToIPv4(fields[2]); gateway != "" {
 					return gateway
 				}
 			}
